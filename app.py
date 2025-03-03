@@ -164,7 +164,7 @@ def seed_cuisines_and_food_preferences():
         print(f"❌ Error seeding cuisines and food preferences: {e}")
 
 
-"
+
 
 
 
