@@ -33,6 +33,7 @@ class UserList(MethodView):
     @blp.arguments(UserSchema)
     def post(self, user_data):
         """Create a new user and return the created user with tokens."""
+        print("user creation called")
         return create_logic(user_data, User, "user")
 
     @jwt_required()
