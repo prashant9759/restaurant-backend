@@ -38,6 +38,9 @@ def add_table_info(restaurant):
     return restaurant_dict
 
 
+
+
+
 @blp.route("/api/restaurants/categorised_by_city")
 class RestaurantList(MethodView):
     def get(self):
@@ -45,9 +48,6 @@ class RestaurantList(MethodView):
 
         restaurants = (
             db.session.query(Restaurant)
-            .options(
-                subqueryload(Restaurant.table_types).subqueryload(TableType.tables),  # Load table types and instances
-            )
             .order_by(Restaurant.city_state_id)  # Order by city_state_id for efficient grouping
             .all()
         )
@@ -75,9 +75,6 @@ class RestaurantList(MethodView):
 
         restaurants = (
             db.session.query(Restaurant)
-            .options(
-                subqueryload(Restaurant.table_types).subqueryload(TableType.tables),  # Load table types and instances
-            )
             .filter(Restaurant.city_state_id == city_state_id)  # Order by city_state_id for efficient grouping
             .all()
         )
@@ -85,7 +82,7 @@ class RestaurantList(MethodView):
 
         # Iterate through the restaurants and group them by city
         for restaurant in restaurants:
-            restaurant_dict =  add_table_info(restaurant)
+            restaurant_dict = restaurant.to_dict()
             
              # Add restaurant under each cuisine category it belongs to
             for cuisine in restaurant.cuisines:
@@ -106,9 +103,6 @@ class RestaurantList(MethodView):
 
         restaurants = (
             db.session.query(Restaurant)
-            .options(
-                subqueryload(Restaurant.table_types).subqueryload(TableType.tables),  # Load table types and instances
-            )
             .filter(Restaurant.city_state_id == city_state_id)  # Order by city_state_id for efficient grouping
             .all()
         )
@@ -116,7 +110,7 @@ class RestaurantList(MethodView):
 
         # Iterate through the restaurants and group them by city
         for restaurant in restaurants:
-            restaurant_dict =  add_table_info(restaurant)
+            restaurant_dict =  restaurant.to_dict()
             
              # Add restaurant under each cuisine category it belongs to
             for food_preference in restaurant.food_preferences:
@@ -125,6 +119,29 @@ class RestaurantList(MethodView):
         return {
             "data": dict(food_preference_grouped_restaurants),
             "message": "All restaurants fetched successfully",
+            "status": 200
+        }, 200
+
+
+@blp.route("/api/restaurants/<int:restaurant_id>")
+class RestaurantList(MethodView):
+    def get(self,restaurant_id):
+        """Fetch a restaurant with every single required detail """
+
+        restaurant = (
+            db.session.query(Restaurant)
+            .options(
+                joinedload(Restaurant.table_types).joinedload(TableType.tables),
+            )
+            .filter(Restaurant.id == restaurant_id)
+            .first()
+        )
+
+        restaurant_dict =  add_table_info(restaurant)
+            # Convert defaultdict to dict before returning
+        return {
+            "data": restaurant_dict,
+            "message": "restaurant details fetched successfully",
             "status": 200
         }, 200
 
