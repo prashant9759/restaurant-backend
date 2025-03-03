@@ -1,0 +1,69 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# Flask cache files
+instance/
+*.log
+
+# Pytest cache
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# IDEs
+.idea/
+*.swp
+
+# MacOS files
+.DS_Store
+
+# Environment variables
+.env
+
+# SQLAlchemy/Migrations
+migrations/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Docker
+docker-compose.override.yml
+*.dockerfile
+
+# MyPy type checker
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyright
+.pyright/
+
+# Test result logs
+test_results/
+
+# Static and media files
+staticfiles/
+media/
