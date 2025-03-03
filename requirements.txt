@@ -1,0 +1,8 @@
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+flask_smorest
+flask_jwt_extended
+dotenv
+passlib
+apscheduler
+pytz

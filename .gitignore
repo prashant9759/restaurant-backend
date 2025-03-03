@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+<<<<<<< HEAD
 build/
 develop-eggs/
 dist/
@@ -130,10 +131,13 @@ celerybeat.pid
 # Environments
 .env
 .venv
+=======
+>>>>>>> 1302f0e (Initial commit)
 env/
 venv/
 ENV/
 env.bak/
+<<<<<<< HEAD
 venv.bak/
 
 # Spyder project settings
@@ -147,10 +151,55 @@ venv.bak/
 /site
 
 # mypy
+=======
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+
+# Flask cache files
+instance/
+*.log
+
+# Pytest cache
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# IDEs
+.idea/
+*.swp
+
+# MacOS files
+.DS_Store
+
+# Environment variables
+.env
+
+# SQLAlchemy/Migrations
+migrations/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Docker
+docker-compose.override.yml
+*.dockerfile
+
+# MyPy type checker
+>>>>>>> 1302f0e (Initial commit)
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
+<<<<<<< HEAD
 # Pyre type checker
 .pyre/
 
@@ -169,3 +218,14 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+=======
+# Pyright
+.pyright/
+
+# Test result logs
+test_results/
+
+# Static and media files
+staticfiles/
+media/
+>>>>>>> 1302f0e (Initial commit)
