@@ -6,3 +6,4 @@ dotenv
 passlib
 apscheduler
 pytz
+pymysql

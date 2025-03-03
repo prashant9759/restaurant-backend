@@ -38,10 +38,10 @@ def add_table_info(restaurant):
     return restaurant_dict
 
 
-@blp.route("/api/restaurants/all")
+@blp.route("/api/restaurants/categorised_by_city")
 class RestaurantList(MethodView):
     def get(self):
-        """Fetch all restaurants with required details"""
+        """Fetch all restaurants categorised by city with basic required details(without table-info)"""
 
         restaurants = (
             db.session.query(Restaurant)
@@ -56,7 +56,7 @@ class RestaurantList(MethodView):
         # Iterate through the restaurants and group them by city
         for restaurant in restaurants:
             city = restaurant.city_state.city if restaurant.city_state else "Unknown"
-            restaurant_dict =  add_table_info(restaurant)
+            restaurant_dict = restaurant.to_dict()
             city_grouped_restaurants[city].append(restaurant_dict)
 
             # Convert defaultdict to dict before returning
@@ -96,6 +96,39 @@ class RestaurantList(MethodView):
             "message": "All restaurants fetched successfully",
             "status": 200
         }, 200
+
+
+
+@blp.route("/api/restaurants/city/<int:city_state_id>/food_preferences")
+class RestaurantList(MethodView):
+    def get(self,city_state_id):
+        """Fetch all restaurants with required details categorised by food_preferences"""
+
+        restaurants = (
+            db.session.query(Restaurant)
+            .options(
+                subqueryload(Restaurant.table_types).subqueryload(TableType.tables),  # Load table types and instances
+            )
+            .filter(Restaurant.city_state_id == city_state_id)  # Order by city_state_id for efficient grouping
+            .all()
+        )
+        food_preference_grouped_restaurants = defaultdict(list)
+
+        # Iterate through the restaurants and group them by city
+        for restaurant in restaurants:
+            restaurant_dict =  add_table_info(restaurant)
+            
+             # Add restaurant under each cuisine category it belongs to
+            for food_preference in restaurant.food_preferences:
+                food_preference_grouped_restaurants[food_preference.name].append(restaurant_dict)
+            # Convert defaultdict to dict before returning
+        return {
+            "data": dict(food_preference_grouped_restaurants),
+            "message": "All restaurants fetched successfully",
+            "status": 200
+        }, 200
+
+
 
 
 @blp.route("/api/restaurants/<int:restaurant_id>/availability/<string:date>")

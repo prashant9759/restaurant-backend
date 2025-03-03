@@ -49,21 +49,6 @@ db.init_app(app)
 app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY")
 jwt = JWTManager(app)
 
-# def check_system_status():
-#     """Function to check if everything is fine (Runs every 10 seconds)."""
-#     print(f"System health check at {datetime.now(pytz.utc)} - Everything is fine!")
-
-# Start the scheduler
-
-# # Add a periodic job that runs every 10 seconds
-# scheduler.add_job(
-#     id="system_health_check",
-#     func=check_system_status,
-#     trigger="interval",
-#     seconds=10,
-#     replace_existing=True  # Ensures re-scheduling if it already exists
-# )
-
 
 
 @jwt.additional_claims_loader

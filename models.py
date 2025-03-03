@@ -256,7 +256,7 @@ class Booking(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     guest_count = db.Column(db.Integer, nullable = True)
-    status = db.Column(db.String, nullable = False, default="active")
+    status = db.Column(db.String(30), nullable = False, default="active")
     
     tables = db.relationship("BookingTable", back_populates="booking")
     user = db.relationship("User", backref="booking")
