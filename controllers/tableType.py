@@ -52,14 +52,15 @@ class TableTypeListResource(MethodView):  # Inherit from MethodView
             for data in table_types_data:
                 verify_admin_ownership(admin_id, restaurant_id)
                 
-                if is_duplicate_table_type(data["name"], restaurant_id):
-                    abort(400, message=f"TableType with name '{data['name']}' already exists for this restaurant.")
-                
                 data["restaurant_id"] = restaurant_id
 
+                # Extract and create features
+                feature_names = data.pop("features", [])
+                feature_instances = [Feature(name=name) for name in feature_names]
+        
                 # Convert shape to Enum
                 data["shape"] = TableShape(data["shape"])
-                table_type = TableType(**data)
+                table_type = TableType(**data,features=feature_instances)
                 db.session.add(table_type)
                 created_table_types.append(table_type)
             db.session.commit()
@@ -69,6 +70,7 @@ class TableTypeListResource(MethodView):  # Inherit from MethodView
             db.session.rollback()
             error_message = str(e.orig)
             abort(400, message=f"Integrity error while creating table types, the error is: {error_message}")
+            
 
 @blp.route("/<int:restaurant_id>/table_types/<int:table_type_id>")
 class TableTypeResource(MethodView):  # Inherit from MethodView

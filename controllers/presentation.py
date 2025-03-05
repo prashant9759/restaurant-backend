@@ -1,8 +1,9 @@
 from flask_smorest import Blueprint, abort
 from flask.views import MethodView
+from flask_jwt_extended import get_jwt_identity, jwt_required,get_jwt
 
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import raiseload, joinedload, subqueryload
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import  joinedload, load_only
 from collections import defaultdict
 
 from scheduler import scheduler
@@ -48,16 +49,51 @@ class RestaurantList(MethodView):
 
         restaurants = (
             db.session.query(Restaurant)
-            .order_by(Restaurant.city_state_id)  # Order by city_state_id for efficient grouping
+            .filter(Restaurant.is_deleted == False)
+            .options(
+                load_only(
+                    Restaurant.id, Restaurant.name, Restaurant.rating, Restaurant.average_cost_level,
+                    Restaurant.street, Restaurant.latitude, Restaurant.longitude, Restaurant.city_state_id,
+                    Restaurant.cover_image
+                ),
+                joinedload(Restaurant.city_state).load_only(
+                    CityStateModel.city, CityStateModel.state, CityStateModel.postal_code
+                ),
+                joinedload(Restaurant.cuisines),  # Fetch related cuisines
+                joinedload(Restaurant.food_preferences)  # Fetch related food preferences
+            )
             .all()
         )
+
+
+        restaurants = [
+            {
+                "restaurant_id": restaurant.id,
+                "name": restaurant.name,
+                "rating": restaurant.rating,
+                "cover_image":restaurant.cover_image,
+                "average_cost_level": restaurant.average_cost_level,
+                "address": {
+                    "city_state_id": restaurant.city_state_id,
+                    "street": restaurant.street,
+                    "latitude": restaurant.latitude,
+                    "longitude": restaurant.longitude,
+                    "city": restaurant.city_state.city if restaurant.city_state else None,
+                    "state": restaurant.city_state.state if restaurant.city_state else None,
+                    "postal_code": restaurant.city_state.postal_code if restaurant.city_state else None
+                },
+                "cuisines": [cuisine.name for cuisine in restaurant.cuisines] if restaurant.cuisines else [],
+                "food_preferences": [pref.name for pref in restaurant.food_preferences] if restaurant.food_preferences else []
+            }
+            for restaurant in restaurants
+        ]
+    
         city_grouped_restaurants = defaultdict(list)
 
         # Iterate through the restaurants and group them by city
         for restaurant in restaurants:
-            city = restaurant.city_state.city if restaurant.city_state else "Unknown"
-            restaurant_dict = restaurant.to_dict()
-            city_grouped_restaurants[city].append(restaurant_dict)
+            city = restaurant["address"]["city"] if restaurant["address"]["city"] else "Unknown"
+            city_grouped_restaurants[city].append(restaurant)
 
             # Convert defaultdict to dict before returning
         return {
@@ -71,22 +107,58 @@ class RestaurantList(MethodView):
 @blp.route("/api/restaurants/city/<int:city_state_id>/categorised_by_cuisines")
 class RestaurantList(MethodView):
     def get(self,city_state_id):
+        
         """Fetch all restaurants with required details categorised by cuisines"""
-
+        
         restaurants = (
             db.session.query(Restaurant)
-            .filter(Restaurant.city_state_id == city_state_id)  # Order by city_state_id for efficient grouping
+            .filter( Restaurant.city_state_id == city_state_id,Restaurant.is_deleted == False)
+            .options(
+                load_only(
+                    Restaurant.id, Restaurant.name, Restaurant.rating, Restaurant.average_cost_level,
+                    Restaurant.street, Restaurant.latitude, Restaurant.longitude, Restaurant.city_state_id,
+                    Restaurant.cover_image
+                ),
+                joinedload(Restaurant.city_state).load_only(
+                    CityStateModel.city, CityStateModel.state, CityStateModel.postal_code
+                ),
+                joinedload(Restaurant.cuisines),  # Fetch related cuisines
+                joinedload(Restaurant.food_preferences)  # Fetch related food preferences
+            )
             .all()
         )
+
+
+        restaurants = [
+            {
+                "restaurant_id": restaurant.id,
+                "name": restaurant.name,
+                "rating": restaurant.rating,
+                "cover_image":restaurant.cover_image,
+                "average_cost_level": restaurant.average_cost_level,
+                "address": {
+                    "city_state_id": restaurant.city_state_id,
+                    "street": restaurant.street,
+                    "latitude": restaurant.latitude,
+                    "longitude": restaurant.longitude,
+                    "city": restaurant.city_state.city if restaurant.city_state else None,
+                    "state": restaurant.city_state.state if restaurant.city_state else None,
+                    "postal_code": restaurant.city_state.postal_code if restaurant.city_state else None
+                },
+                "cuisines": [cuisine.name for cuisine in restaurant.cuisines] if restaurant.cuisines else [],
+                "food_preferences": [pref.name for pref in restaurant.food_preferences] if restaurant.food_preferences else []
+            }
+            for restaurant in restaurants
+        ]
+    
         cuisine_grouped_restaurants = defaultdict(list)
 
         # Iterate through the restaurants and group them by city
         for restaurant in restaurants:
-            restaurant_dict = restaurant.to_dict()
             
              # Add restaurant under each cuisine category it belongs to
-            for cuisine in restaurant.cuisines:
-                cuisine_grouped_restaurants[cuisine.name].append(restaurant_dict)
+            for cuisine in restaurant["cuisines"]:
+                cuisine_grouped_restaurants[cuisine].append(restaurant)
             # Convert defaultdict to dict before returning
         return {
             "data": dict(cuisine_grouped_restaurants),
@@ -96,26 +168,63 @@ class RestaurantList(MethodView):
 
 
 
-@blp.route("/api/restaurants/city/<int:city_state_id>/food_preferences")
+@blp.route("/api/restaurants/city/<int:city_state_id>/categorised_by_food_preferences")
 class RestaurantList(MethodView):
     def get(self,city_state_id):
         """Fetch all restaurants with required details categorised by food_preferences"""
 
         restaurants = (
             db.session.query(Restaurant)
-            .filter(Restaurant.city_state_id == city_state_id)  # Order by city_state_id for efficient grouping
+            .filter( Restaurant.city_state_id == city_state_id,Restaurant.is_deleted == False)
+            .options(
+                load_only(
+                    Restaurant.id, Restaurant.name, Restaurant.rating, Restaurant.average_cost_level,
+                    Restaurant.street, Restaurant.latitude, Restaurant.longitude, Restaurant.city_state_id,
+                    Restaurant.cover_image
+                ),
+                joinedload(Restaurant.city_state).load_only(
+                    CityStateModel.city, CityStateModel.state, CityStateModel.postal_code
+                ),
+                joinedload(Restaurant.cuisines),  # Fetch related cuisines
+                joinedload(Restaurant.food_preferences)  # Fetch related food preferences
+            )
             .all()
         )
+
+
+        restaurants = [
+            {
+                "restaurant_id": restaurant.id,
+                "name": restaurant.name,
+                "rating": restaurant.rating,
+                "cover_image":restaurant.cover_image,
+                "average_cost_level": restaurant.average_cost_level,
+                "address": {
+                    "city_state_id": restaurant.city_state_id,
+                    "street": restaurant.street,
+                    "latitude": restaurant.latitude,
+                    "longitude": restaurant.longitude,
+                    "city": restaurant.city_state.city if restaurant.city_state else None,
+                    "state": restaurant.city_state.state if restaurant.city_state else None,
+                    "postal_code": restaurant.city_state.postal_code if restaurant.city_state else None
+                },
+                "cuisines": [cuisine.name for cuisine in restaurant.cuisines] if restaurant.cuisines else [],
+                "food_preferences": [pref.name for pref in restaurant.food_preferences] if restaurant.food_preferences else []
+            }
+            for restaurant in restaurants
+        ]
+        
         food_preference_grouped_restaurants = defaultdict(list)
 
         # Iterate through the restaurants and group them by city
         for restaurant in restaurants:
-            restaurant_dict =  restaurant.to_dict()
             
              # Add restaurant under each cuisine category it belongs to
-            for food_preference in restaurant.food_preferences:
-                food_preference_grouped_restaurants[food_preference.name].append(restaurant_dict)
-            # Convert defaultdict to dict before returning
+            for food_preference in restaurant["food_preferences"]:
+                food_preference_grouped_restaurants[food_preference].append(restaurant)
+                
+                
+        # Convert defaultdict to dict before returning
         return {
             "data": dict(food_preference_grouped_restaurants),
             "message": "All restaurants fetched successfully",
@@ -123,28 +232,46 @@ class RestaurantList(MethodView):
         }, 200
 
 
+
+def is_restaurant_liked_by_user(user_id, restaurant_id):
+    """Check if the logged-in user has liked the restaurant."""
+    return db.session.query(RestaurantLike).filter_by(user_id=user_id, restaurant_id=restaurant_id).first() is not None
+
+
+
+
 @blp.route("/api/restaurants/<int:restaurant_id>")
-class RestaurantList(MethodView):
-    def get(self,restaurant_id):
-        """Fetch a restaurant with every single required detail """
-
-        restaurant = (
-            db.session.query(Restaurant)
-            .options(
-                joinedload(Restaurant.table_types).joinedload(TableType.tables),
-            )
-            .filter(Restaurant.id == restaurant_id)
-            .first()
+@jwt_required(optional=True)  # Allow both logged-in and non-logged-in users
+def get_restaurant(restaurant_id):
+    user_id = get_jwt_identity()  # Get logged-in user ID (None if not logged in)
+    
+    if user_id:
+        claims = get_jwt()
+        if claims.get("role") != "user":
+            user_id = None
+        
+        
+    restaurant = (
+        db.session.query(Restaurant)
+        .options(
+            joinedload(Restaurant.policy),
+            joinedload(Restaurant.cuisines),
+            joinedload(Restaurant.food_preferences),
+            joinedload(Restaurant.operating_hours),
+            joinedload(Restaurant.reviews),
+            joinedload(Restaurant.table_types),
         )
+        .filter_by(id=restaurant_id)
+        .first_or_404()
+    )
 
-        restaurant_dict =  add_table_info(restaurant)
-            # Convert defaultdict to dict before returning
-        return {
-            "data": restaurant_dict,
-            "message": "restaurant details fetched successfully",
-            "status": 200
-        }, 200
+    restaurant_data = restaurant.to_dict()
+    restaurant_data.pop("admin")
+    # If user is logged in, include the 'like' field
+    if user_id:
+        restaurant_data["like"] = is_restaurant_liked_by_user(user_id, restaurant_id)
 
+    return {"data":restaurant_data, "message":"Restaurant info fetched successfully", "status":200}, 200
 
 
 

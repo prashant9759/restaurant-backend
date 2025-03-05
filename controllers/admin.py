@@ -8,7 +8,7 @@ from passlib.hash import pbkdf2_sha256
 
 from models import Admin
 from db import db
-from schemas import AdminSchema, LoginSchema# Use AdminSchema
+from schemas import AdminSchema, LoginSchema, ChangePasswordSchema
 from services.logout import logout_logic
 from services.helper import *
 
@@ -29,6 +29,7 @@ class AdminList(MethodView):
     @blp.arguments(AdminSchema)
     def post(self, admin_data):
         """Create a new admin and return the created admin with tokens."""
+        admin_data.pop("confirm_password")
         return create_logic(admin_data, Admin, "admin")
 
     @jwt_required()
@@ -39,15 +40,6 @@ class AdminList(MethodView):
         return get_item_by_id_logic(admin_id, Admin, "admin")
 
     @jwt_required()
-    @blp.arguments(AdminSchema)
-    def put(self, admin_data):
-        """Replace the current admin (PUT, idempotent)."""
-        check_admin_role()
-        admin_id = get_jwt_identity()
-        admin = Admin.query.get_or_404(int(admin_id))
-        return update_logic(admin ,admin_data, "admin")
-
-    @jwt_required()
     @blp.arguments(AdminSchema(partial=True))
     def patch(self, admin_data):
         """Update the current admin (PATCH, partial update)."""
@@ -56,21 +48,21 @@ class AdminList(MethodView):
         admin = Admin.query.get_or_404(int(admin_id))
         return update_logic(admin ,admin_data, "admin")
 
-    @jwt_required()
-    @blp.response(204)
-    def delete(self):
-        """Delete the current admin."""
-        check_admin_role()
-        admin_id = get_jwt_identity()
-        return delete_logic(admin_id, Admin, "admin")
-
 @blp.route("/api/admins/all")
 class AllAdmins(MethodView):
     def get(self):
         """Get all admins without any authentication."""
         return get_all_item_logic(Admin, "admin")
     
-     
+    
+@blp.route("/api/admins/change-password", methods=["POST"])
+@jwt_required()
+@blp.arguments(ChangePasswordSchema)  
+def change_password(data):
+    check_admin_role()
+    user_id = get_jwt_identity()
+    admin = Admin.query.filter_by(id=user_id, is_deleted=False).first_or_404()
+    return update_password(admin,data)
     
 
 @blp.route("/api/admins/login")

@@ -58,9 +58,6 @@ def create_logic(data, Model, entity):
         # Extract address data from hospital_data
         field = manage_address_field(data)
     
-    # Add the address_id to hospital_data and create the hospital
-    if len(data["password"]) < 6:
-        abort(400, message="Password must be at least 6 characters long.")
     data["password"] = pbkdf2_sha256.hash(data["password"])
     item = Model(**data, **field)
     
@@ -100,7 +97,7 @@ def create_logic(data, Model, entity):
 
 def get_all_item_logic(Model, entity):
     """Fetch all items from the database."""
-    items = Model.query.all()
+    items = Model.query.filter_by(is_deleted=False).all()
     return {f"{entity}s": [item.to_dict() for item in items], "message":f"all {entity}s fetched successfully", "status":200}, 200
   
 
@@ -156,13 +153,6 @@ def update_address(item, data, entity):
 
 def update_logic(item, data, entity):
     try:
-
-        # Handle password updates (if applicable)
-        if 'password' in data and hasattr(item, 'password'):
-            if len(data["password"]) < 6:
-                abort(400, message="Password must be at least 6 characters long.")
-            data["password"] = pbkdf2_sha256.hash(data["password"])
-
         # Dynamically update fields based on model attributes
         for key, value in data.items():
             if key == "shape":
@@ -195,9 +185,9 @@ def update_logic(item, data, entity):
 
 def login_logic(login_data, Model, entity):
     """Business logic to log in a user."""
-    item = Model.query.filter_by(name=login_data["name"]).first()
+    item = Model.query.filter_by(email=login_data["email"],is_deleted=False).first_or_404()
     if not item or not pbkdf2_sha256.verify(login_data["password"], item.password):
-        return abort(401, message="Invalid username or password.")
+        return abort(401, message="Invalid email or password.")
     
     access_token = create_access_token(identity=str(item.id), additional_claims={"role": f"{entity}"}, fresh=True)
     refresh_token = create_refresh_token(identity=str(item.id),additional_claims={"role": f"{entity}"})
@@ -220,6 +210,26 @@ def delete_logic(id, Model, entity):
     db.session.delete(item)
     db.session.commit()
     return {"message": f"{entity} deleted successfully", "status": 204}, 204
+
+
+# update password
+def update_password(item,data):
+    # Check if current password is correct
+    try:
+        if not item or not pbkdf2_sha256.verify(data["current_password"], item.password):
+            print("here")
+            return { "message":"Wrong password Provided.","status":401},401
+
+        # Update password
+        item.password = pbkdf2_sha256.hash(data["new_password"])
+        db.session.commit()
+
+        return {"message": "Password updated successfully!"}, 200
+    
+    except Exception as e:
+        db.session.rollback()  # Rollback in case of failure
+        return {"error": str(e)}, 500  # Generic error handling
+
 
 # Haversine formula for calculating distance
 

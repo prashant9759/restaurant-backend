@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 blp = Blueprint("admin_dashboard", __name__, description="Admin Booking Management")
 
 
-@blp.route("/api/admins/restaurants/bookings/<string:date>")
+@blp.route("/api/admins/restaurants/bookings_by_slot/<string:date>")
 @jwt_required()
 def get_bookings(date):
     """This API fetches all active bookings for a restaurant admin on a specific date. It organizes bookings by time slots, showing details"""
@@ -39,7 +39,6 @@ def get_bookings(date):
 
     # Generate dynamic time slots
     time_slots = generate_time_slots(policy.opening_time, policy.closing_time, policy.reservation_duration)
-    print(time_slots)
 
     # Fetch bookings with proper joins
     bookings = Booking.query.filter_by(restaurant_id=restaurant_id, date=date_obj) \
@@ -97,7 +96,7 @@ def get_bookings(date):
 @blp.route("/api/admins/restaurants/tables/status/<string:date>")
 @jwt_required()
 def get_all_table_status(date):
-    """This API allows an admin to retrieve a detailed availability status of all tables in their restaurant for a specific date."""
+    """This API allows an admin to retrieve a detailed availability status of all tables in their restaurant for a specific     date."""
     claims = get_jwt()
     if claims.get("role") != "admin":
         abort(403, message="Access forbidden: Admin role required.")
@@ -136,7 +135,7 @@ def get_all_table_status(date):
 
     for table_type in table_types:
         table_type_data = {
-            "id": table_type.id,
+            "table_type_id": table_type.id,
             "capacity": table_type.capacity,
             "is_outdoor": table_type.is_outdoor,
             "is_accessible": table_type.is_accessible,
@@ -173,4 +172,69 @@ def get_all_table_status(date):
 
     return {"date": date, "tables_by_type": tables_by_type}
 
+
+
+
+@blp.route("/api/admins/restaurants/bookings/<string:date>", methods=["GET"])
+@jwt_required()
+def get_bookings(date):
+    
+    """This API allows an admin to retrieve the details of all booking in their restaurant for a specific date."""
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        abort(403, message="Access forbidden: Admin role required.")    
+    # Fetch restaurant policy for slot generation
+    admin_id = get_jwt_identity()
+    restaurant = Restaurant.query.filter(Restaurant.admin_id == admin_id).first()   
+
+    if not restaurant :
+        return {"error": "No Restaurant found for this admin"}, 404
+
+    restaurant_id = restaurant.id
+    # Fetch bookings ordered by start_time
+    bookings = (
+        db.session.query(Booking)
+        .filter(Booking.restaurant_id == restaurant_id, Booking.date == date)
+        .order_by(Booking.start_time.asc())  # Ordering by start_time (earliest first)
+        .options(
+            joinedload(Booking.user),  # Load user details
+            joinedload(Booking.tables).joinedload(BookingTable.table).joinedload(TableInstance.table_type)  # Load tables & table types
+        )
+        .all()
+    )  
+    # Transform data
+    result = []
+    for booking in bookings:
+        booking_info = {
+            "booking_id": booking.id,
+            "start_time": booking.start_time,
+            "status": booking.status,
+            "user": booking.user.name,
+            "contact": booking.user.phone,
+            "guest_count": booking.guest_count,
+            "table_types": []
+        }   
+        table_types_map = {}
+        for bt in booking.tables:
+            table_type = bt.table.table_type
+            if table_type.id not in table_types_map:
+                table_types_map[table_type.id] = {
+                "table_type_id": table_type.id,
+                "capacity": table_type.capacity,
+                "is_outdoor": table_type.is_outdoor,
+                "is_accessible": table_type.is_accessible,
+                "shape": table_type.shape.name if table_type.shape else None,
+                "price": table_type.price,
+                "tables":[]
+            }   
+            table_types_map[table_type.id]["tables"].append({
+                "table_id": bt.table.id,
+                "table_number": bt.table.table_number,
+                "location_description": bt.table.location_description,
+                "is_available": bt.table.is_available
+            })  
+        booking_info["table_types"] = list(table_types_map.values())  # Convert dict to list
+        result.append(booking_info) 
+        
+    return {"data":result, "message":"All bookings fetched successfully", "status":200}, 200
 
