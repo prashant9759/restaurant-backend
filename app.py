@@ -32,7 +32,7 @@ from services.logout import is_token_revoked
 load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-# cors = CORS(app)
+cors = CORS(app)
 app.config["PROPAGATE_EXCEPTIONS"] = True
 app.config["API_TITLE"] = "Restaurant Table Reservation API"
 app.config["API_VERSION"] = "v1"
@@ -173,7 +173,6 @@ def seed_cuisines_and_food_preferences():
 
 port = int(os.getenv("PORT", 5000))  # Default to 5000 if PORT is not set
 
-print("Api running on port : {} ".format(port))
 
 if __name__ == '__main__':
     with app.app_context():
@@ -182,3 +181,4 @@ if __name__ == '__main__':
         seed_cuisines_and_food_preferences()
 
         app.run(host="0.0.0.0", port=port, debug=False)
+        print("Api running on port : {} ".format(port))
