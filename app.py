@@ -3,7 +3,7 @@ from flask import Flask, jsonify
 from flask_smorest import Api
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import HTTPException
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 
 import os
 from dotenv import load_dotenv
