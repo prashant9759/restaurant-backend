@@ -169,7 +169,7 @@ def seed_cuisines_and_food_preferences():
 #     print("All tables dropped successfully!")
 
 
-port = 5100
+
 
 port = int(os.getenv("PORT", 5000))  # Default to 5000 if PORT is not set
 
@@ -181,4 +181,4 @@ if __name__ == '__main__':
         db.create_all()
         seed_cuisines_and_food_preferences()
 
-        app.run(host="0.0.0.0", port=port, debug="false")
+        app.run(host="0.0.0.0", port=port, debug=False)
