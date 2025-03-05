@@ -129,9 +129,9 @@ def seed_cuisines_and_food_preferences():
         if not existing_cuisine:
             new_cuisine = CuisineType(name=cuisine.value)
             db.session.add(new_cuisine)
-            print(f"Added Cuisine: {cuisine.value}")
-        else:
-            print(f"Already exists: {cuisine.value}")
+            # print(f"Added Cuisine: {cuisine.value}")
+        # else:
+        #     print(f"Already exists: {cuisine.value}")
 
     # Seeding Food Preferences
     for preference in FoodPreferenceEnum:
@@ -140,39 +140,39 @@ def seed_cuisines_and_food_preferences():
         if not existing_preference:
             new_preference = FoodPreferenceType(name=preference.value)
             db.session.add(new_preference)
-            print(f"Added Food Preference: {preference.value}")
-        else:
-            print(f"Already exists: {preference.value}")
+            # print(f"Added Food Preference: {preference.value}")
+        # else:
+        #     print(f"Already exists: {preference.value}")
 
     # Commit changes
     try:
         db.session.commit()
-        print("✅ All cuisines and food preferences seeded successfully.")
+        # print("✅ All cuisines and food preferences seeded successfully.")
     except Exception as e:
         db.session.rollback()
         print(f"❌ Error seeding cuisines and food preferences: {e}")
 
 
-def drop_all_tables():
-    """Drops all tables in the database irrespective of foreign keys."""
-    db.session.commit()  # Ensure all pending transactions are committed
+# def drop_all_tables():
+#     """Drops all tables in the database irrespective of foreign keys."""
+#     db.session.commit()  # Ensure all pending transactions are committed
 
-    with db.engine.connect() as connection:
-        connection.execute(text("SET FOREIGN_KEY_CHECKS = 0"))  # ✅ Use text()
+#     with db.engine.connect() as connection:
+#         connection.execute(text("SET FOREIGN_KEY_CHECKS = 0"))  # ✅ Use text()
 
-    db.reflect()  # Reflect all tables from the database
-    db.drop_all()  # Drop all tables
+#     db.reflect()  # Reflect all tables from the database
+#     db.drop_all()  # Drop all tables
 
-    with db.engine.connect() as connection:
-        connection.execute(text("SET FOREIGN_KEY_CHECKS = 1"))  # ✅ Use text()
+#     with db.engine.connect() as connection:
+#         connection.execute(text("SET FOREIGN_KEY_CHECKS = 1"))  # ✅ Use text()
 
-    print("All tables dropped successfully!")
+#     print("All tables dropped successfully!")
 
 
 port = 5100
 
-if sys.argv.__len__() > 1:
-    port = sys.argv[1]
+port = int(os.getenv("PORT", 5000))  # Default to 5000 if PORT is not set
+
 print("Api running on port : {} ".format(port))
 
 if __name__ == '__main__':
@@ -180,6 +180,5 @@ if __name__ == '__main__':
         scheduler.start()
         db.create_all()
         seed_cuisines_and_food_preferences()
-        # Default to 5000 if PORT is not set
 
         app.run(host="0.0.0.0", port=port, debug="false")
