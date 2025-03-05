@@ -276,7 +276,8 @@ class CreateBooking(MethodView):
         table_types = {t.id: t for t in db.session.execute(
             select(TableType).where(
                 TableType.id.in_(table_type_ids),
-                TableType.restaurant_id == restaurant_id
+                TableType.restaurant_id == restaurant_id,
+                TableType.is_deleted==False,
             )
         ).scalars().all()}  # Convert to dict for easy lookup
 
