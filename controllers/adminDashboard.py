@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, date
 
 from sqlalchemy.sql import func
 from flask import request
+from collections import defaultdict
+
 
 
 blp = Blueprint("admin_dashboard", __name__, description="Admin Booking Management")
@@ -478,6 +480,75 @@ def get_dashboard_data(restaurant_id):
     return {"data":data},200
 
 
+from collections import defaultdict
+from sqlalchemy.sql import func, case
+from sqlalchemy import Integer
+
+def get_table_utilization(start_date, end_date, restaurant_id):
+    utilization = (
+        db.session.query(
+            TableType.name,
+            func.coalesce(func.count(BookingTable.id), 0).label("occupied_tables"),  # Ensure no NULL values
+            func.count(TableInstance.id).label("total_tables")
+        )
+        .join(TableInstance, TableType.id == TableInstance.table_type_id)
+        .outerjoin(BookingTable, TableInstance.id == BookingTable.table_id)
+        .outerjoin(Booking, BookingTable.booking_id == Booking.id)
+        .filter(TableType.restaurant_id == restaurant_id)
+        .group_by(TableType.name)
+        .all()
+    )
+
+    return {
+        record.name: round((record.occupied_tables / record.total_tables) * 100, 2) if record.total_tables else 0
+        for record in utilization
+    }
+
+
+def get_time_based_occupancy(start_date, end_date, restaurant_id):
+    # Query actual data
+    time_occupancy = (
+        db.session.query(
+            func.hour(Booking.start_time).label("hour"),
+            func.dayofweek(Booking.date).label("day_of_week"),
+            func.count(BookingTable.id).label("occupied_tables"),
+        )
+        .join(BookingTable, Booking.id == BookingTable.booking_id)
+        .filter(
+            Booking.restaurant_id == restaurant_id,
+            Booking.date.between(start_date, end_date),
+            Booking.status.in_(["active", "completed"]),
+        )
+        .group_by(func.hour(Booking.start_time), func.dayofweek(Booking.date))
+        .all()
+    )
+
+    # Create a default structure to ensure all hours (0-23) and all days (1-7) are included
+    occupancy_data = {day: {hour: 0 for hour in range(24)} for day in range(1, 8)}
+
+    # Populate actual data
+    for record in time_occupancy:
+        occupancy_data[record.day_of_week][record.hour] = record.occupied_tables
+
+    # Flatten the data and sort
+    flattened_data = [
+        {"day": day, "hour": hour, "occupancy": occupancy}
+        for day, hours in occupancy_data.items()
+        for hour, occupancy in hours.items()
+    ]
+    
+    # Sort by occupancy to get peak and slowest times
+    sorted_times = sorted(flattened_data, key=lambda x: x["occupancy"], reverse=True)
+
+    peak_hours = sorted_times[:3]  # Top 3 busiest times
+    slowest_times = sorted_times[-3:]  # Bottom 3 least busy times
+
+    return {
+        "peak_hours": peak_hours,
+        "slowest_times": slowest_times
+    }
+
+
 
 @blp.route("/api/admins/restaurants/<int:restaurant_id>/dashboard/analytics_dashboard/restaurant_performance", methods=["POST"])
 @jwt_required()
@@ -539,8 +610,7 @@ def get_restaurant_performance_data(restaurant_id):
             Booking.restaurant_id == restaurant_id,
             Booking.date.between(start_date, end_date),
             Booking.status.in_(["active", "completed"])  # Correct filtering
-        )
-
+        ).first()
 
         total_reservations = reservations.total_reservations or 0
         total_guests = reservations.total_guests or 0
@@ -593,5 +663,6 @@ def get_restaurant_performance_data(restaurant_id):
             "trend": calculate_percentage_change(current_data["revenue_per_booking"], previous_data["revenue_per_booking"])
         }
     }
-
+    print(f"get_time_based_occupancy -> {get_time_based_occupancy(current_start_date,current_end_date,restaurant_id)}")
+    print(f"get_table_utilization {get_table_utilization(current_end_date, current_end_date, restaurant_id)}")
     return {"data": data}, 200
