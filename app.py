@@ -26,7 +26,7 @@ from controllers.tableInstance import blp as tableBlp
 from controllers.presentation import blp as PresentationBlp
 from controllers.user_restaurant import blp as UserRestaurantBlp
 from controllers.adminDashboard import blp as AdminDashboardBlp
-
+import sys
 from services.logout import is_token_revoked
 
 load_dotenv()  # Load environment variables from .env file
@@ -169,11 +169,17 @@ def drop_all_tables():
     print("All tables dropped successfully!")
 
 
+port = 5100
+
+if sys.argv.__len__() > 1:
+    port = sys.argv[1]
+print("Api running on port : {} ".format(port))
+
 if __name__ == '__main__':
     with app.app_context():
         scheduler.start()
         db.create_all()
         seed_cuisines_and_food_preferences()
         # Default to 5000 if PORT is not set
-        port = int(os.environ.get("PORT", 5000))
-        app.run(host="0.0.0.0", port=5000, debug=False)
+
+        app.run(host="0.0.0.0", port=port, debug="false")
