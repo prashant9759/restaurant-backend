@@ -32,7 +32,7 @@ from services.logout import is_token_revoked
 load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-cors = CORS(app)
+# cors = CORS(app)
 app.config["PROPAGATE_EXCEPTIONS"] = True
 app.config["API_TITLE"] = "Restaurant Table Reservation API"
 app.config["API_VERSION"] = "v1"
