@@ -523,34 +523,40 @@ def get_time_based_occupancy(start_date, end_date, restaurant_id):
         .all()
     )
 
-    # Create a default structure to ensure all hours (0-23) and all days (1-7) are included
-    occupancy_data = {day: {hour: 0 for hour in range(24)} for day in range(1, 8)}
+    # Mapping day numbers (1-7) to actual day names
+    day_mapping = {
+        1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday",
+        5: "Friday", 6: "Saturday", 7: "Sunday"
+    }
+
+    # Initialize default response with "N/A"
+    peak_hours = {day: "N/A" for day in day_mapping.values()}
+    slowest_hours = {day: "N/A" for day in day_mapping.values()}
+
+    # Create a dictionary to store occupancy per day
+    occupancy_data = {day: {} for day in day_mapping.values()}
 
     # Populate actual data
     for record in time_occupancy:
-        occupancy_data[record.day_of_week][record.hour] = record.occupied_tables
+        day_name = day_mapping.get(record.day_of_week)
+        occupancy_data[day_name][record.hour] = record.occupied_tables
 
-    # Flatten the data and sort
-    flattened_data = [
-        {"day": day, "hour": hour, "occupancy": occupancy}
-        for day, hours in occupancy_data.items()
-        for hour, occupancy in hours.items()
-    ]
-    
-    # Sort by occupancy to get peak and slowest times
-    sorted_times = sorted(flattened_data, key=lambda x: x["occupancy"], reverse=True)
-
-    peak_hours = sorted_times[:3]  # Top 3 busiest times
-    slowest_times = sorted_times[-3:]  # Bottom 3 least busy times
+    # Find peak and slowest hour for each day
+    for day, hours in occupancy_data.items():
+        if hours:  # If there is at least one reservation
+            peak_hour = max(hours, key=hours.get)  # Hour with max occupancy
+            slowest_hour = min(hours, key=hours.get)  # Hour with min occupancy
+            peak_hours[day] = peak_hour
+            slowest_hours[day] = slowest_hour
 
     return {
         "peak_hours": peak_hours,
-        "slowest_times": slowest_times
+        "slowest_times": slowest_hours
     }
 
 
 
-@blp.route("/api/admins/restaurants/<int:restaurant_id>/dashboard/analytics_dashboard/restaurant_performance", methods=["POST"])
+@blp.route("/api/admins/restaurants/<int:restaurant_id>/dashboard/analytics_dashboard", methods=["POST"])
 @jwt_required()
 def get_restaurant_performance_data(restaurant_id):
     """This API allows an admin to retrieve key booking metrics for their restaurant, including total reservations, average occupancy, average party size, revenue per booking, and upcoming reservations, categorized by today, this week, and this month."""
@@ -572,10 +578,10 @@ def get_restaurant_performance_data(restaurant_id):
 
     # Extract date ranges from request
     data = request.get_json()
-    current_start_date = data.get("current_start_date")
-    current_end_date = data.get("current_end_date")
-    previous_start_date = data.get("previous_start_date")
-    previous_end_date = data.get("previous_end_date")
+    current_start_date = data.pop("current_start_date")
+    current_end_date = data.pop("current_end_date")
+    previous_start_date = data.pop("previous_start_date")
+    previous_end_date = data.pop("previous_end_date")
 
     if not all([current_start_date, current_end_date, previous_start_date, previous_end_date]):
         abort(400, message="Please provide all required date ranges.")
@@ -637,7 +643,6 @@ def get_restaurant_performance_data(restaurant_id):
     
     current_data = fetch_metrics(current_start_date, current_end_date,total_current_slot)
     previous_data = fetch_metrics(previous_start_date, previous_end_date,total_previous_slot)
-    print(current_data)
 
     def calculate_percentage_change(current, previous):
         if previous == 0:
@@ -645,7 +650,7 @@ def get_restaurant_performance_data(restaurant_id):
         return f"{round(((current - previous) / previous) * 100, 2)}%"
 
     # Compute trends
-    data = {
+    data["restaurant_performance"] = {
         "total_reservations": {
             "value": current_data["total_reservations"],
             "trend": calculate_percentage_change(current_data["total_reservations"], previous_data["total_reservations"])
@@ -663,6 +668,9 @@ def get_restaurant_performance_data(restaurant_id):
             "trend": calculate_percentage_change(current_data["revenue_per_booking"], previous_data["revenue_per_booking"])
         }
     }
-    print(f"get_time_based_occupancy -> {get_time_based_occupancy(current_start_date,current_end_date,restaurant_id)}")
-    print(f"get_table_utilization {get_table_utilization(current_end_date, current_end_date, restaurant_id)}")
+    data["occupancy_trends"]={}
+    time_based_occupancy = get_time_based_occupancy(current_start_date,current_end_date,restaurant_id)
+    data["occupancy_trends"]['peak_hours']=time_based_occupancy['peak_hours']
+    data["occupancy_trends"]['slowest_times'] = time_based_occupancy['slowest_times']
+    data['table_utilization'] = get_table_utilization(current_end_date, current_end_date, restaurant_id)
     return {"data": data}, 200

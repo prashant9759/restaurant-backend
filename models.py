@@ -392,6 +392,7 @@ class TableType(db.Model):
             "description": self.description,
             "reservation_fees": self.reservation_fees,
             "cover_image": self.cover_image,
+            "is_deleted":self.is_deleted,
             "features": self.features, # Return list of features
             "shape": self.shape.name if self.shape else None,  # Convert Enum to string
             "features": [{"feature_id": f.id, "name": f.name} for f in self.features],
@@ -404,6 +405,7 @@ class TableInstance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     table_type_id = db.Column(db.Integer, db.ForeignKey('table_type.id'), nullable=False)
     table_number = db.Column(db.String(20), nullable=False)  # Unique ID within restaurant
+    capacity = db.Column(db.Integer, nullable=False)  # Number of seats
     location_description = db.Column(db.String(100))  # e.g., "Near window", "By the patio"
     is_available = db.Column(db.Boolean, default=True)  # Track table availability
     is_deleted = db.Column(db.Boolean, default=False)
@@ -425,7 +427,9 @@ class TableInstance(db.Model):
             "table_id": self.id,
             "table_number": self.table_number,
             "location_description": self.location_description,
-            "is_available": self.is_available
+            "is_available": self.is_available,
+            "is_deleted":self.is_deleted,
+            "capacity":self.capacity
         }
 
 
@@ -523,6 +527,18 @@ class RestaurantReview(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 
+
+class DailyStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    total_reservations = db.Column(db.Integer, default=0)
+    total_cancelled_reservations = db.Column(db.Integer, default=0)
+    total_revenue = db.Column(db.Float, default=0.0)
+    maximum_occupancy = db.Column(db.Integer, default=0)
+    reserved_occupancy = db.Column(db.Integer, default=0)
+
+    __table_args__ = (db.UniqueConstraint('restaurant_id', 'date', name='unique_daily_stats'),)  # Ensures uniqueness
 
 
 

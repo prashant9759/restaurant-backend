@@ -98,6 +98,7 @@ def change_password(data):
 class AllUsers(MethodView):
     def get(self):
         """Get all users without any authentication."""
+        print("called")
         return get_all_item_logic(User, "user")
     
     

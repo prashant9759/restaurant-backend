@@ -315,6 +315,8 @@ class CreateBooking(MethodView):
             available_tables = db.session.execute(
                 select(TableInstance).where(
                     TableInstance.table_type_id == type_id,
+                    TableInstance.is_available==True,
+                    TableInstance.is_deleted==False,
                     TableInstance.id.notin_(already_booked_table_ids)
                 ).limit(requested_count)
             ).scalars().all()

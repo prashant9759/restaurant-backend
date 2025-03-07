@@ -40,6 +40,7 @@ class TableSchema(Schema):
     table_number = fields.Str(required=True, validate=validate.Length(min=1))
     location_description = fields.Str(allow_none=True)
     is_available = fields.Bool(missing=True)
+    capacity= fields.Int(required=True)
 
 
 class TableTypeSchema(Schema):
@@ -58,7 +59,7 @@ class TableTypeSchema(Schema):
 
     @post_load
     def validate_table_type(self, data, **kwargs):
-        if data.get("minimum_capacity", 0) > data.get("maximum_capacity", 0):  # Fixed validation logic
+        if data.get("minimum_capacity", 0) > data.get("maximum_capacity", 10000000000):  # Fixed validation logic
             raise ValidationError("Minimum capacity must be smaller than Maximum capacity.")
         return data
 
@@ -308,6 +309,16 @@ class RestaurantReviewSchema(Schema):
         if value and value.strip() == "":
             raise ValidationError("Review cannot be empty or only spaces.")
 
+
+
+
+class FeatureSpecialityActionSchema(Schema):
+    add = fields.List(fields.String(), required=False)
+    remove = fields.List(fields.Integer(), required=False)
+
+class UpdateFeatureSpecialitySchema(Schema):
+    features = fields.Nested(FeatureSpecialityActionSchema, required=False)
+    specialities = fields.Nested(FeatureSpecialityActionSchema, required=False)
 
 
 

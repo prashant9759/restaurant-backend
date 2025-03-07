@@ -4,17 +4,22 @@ from flask_smorest import Api
 from flask_jwt_extended import JWTManager
 from werkzeug.exceptions import HTTPException
 from flask_cors import CORS
+from sqlalchemy.orm import joinedload
 
 import os
 from dotenv import load_dotenv
 
-from datetime import datetime
-import pytz
+from datetime import datetime, time
 
 from db import db
+from apscheduler.triggers.cron import CronTrigger
 
+from models import (
+    CuisineType, CuisineEnum, FoodPreferenceType, FoodPreferenceEnum, 
+    Restaurant
+)
+from services.helper import dailyStatsEntry
 
-from models import CuisineType, CuisineEnum, FoodPreferenceType, FoodPreferenceEnum
 
 from scheduler import scheduler
 
@@ -52,12 +57,6 @@ db.init_app(app)
 app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY")
 jwt = JWTManager(app)
 
-
-@jwt.additional_claims_loader
-def add_claims_to_jwt(identity):
-    if identity == '1':  # Admin-specific logic
-        return {"isAdmin": True}
-    return {"isAdmin": False}
 
 
 @jwt.token_in_blocklist_loader
@@ -153,6 +152,21 @@ def seed_cuisines_and_food_preferences():
         print(f"❌ Error seeding cuisines and food preferences: {e}")
 
 
+
+def create_daily_stats_for_all_restaurants():
+    today = datetime.now().date()
+    weekday = today.weekday()  # 0 (Monday) to 6 (Sunday)
+    # Fetch all restaurants
+    with app.app_context():
+        restaurants = Restaurant.query.options(
+            joinedload(Restaurant.policy),  
+            joinedload(Restaurant.operating_hours)
+        ).filter_by(is_deleted=False).all()
+
+        for restaurant in restaurants:
+            dailyStatsEntry(restaurant, today, weekday, app)
+
+
 # def drop_all_tables():
 #     """Drops all tables in the database irrespective of foreign keys."""
 #     db.session.commit()  # Ensure all pending transactions are committed
@@ -174,11 +188,17 @@ def seed_cuisines_and_food_preferences():
 port = int(os.getenv("PORT", 5000))  # Default to 5000 if PORT is not set
 
 
+
 if __name__ == '__main__':
+    print("Api running on port : {} ".format(port))
     with app.app_context():
-        scheduler.start()
         db.create_all()
         seed_cuisines_and_food_preferences()
-
+        scheduler.add_job(
+            create_daily_stats_for_all_restaurants,
+            trigger=CronTrigger(hour=0, minute=0),  # Runs at midnight
+            id="create_daily_entries",
+            replace_existing=True
+        )
+        scheduler.start()
         app.run(host="0.0.0.0", port=port, debug=False)
-        print("Api running on port : {} ".format(port))
