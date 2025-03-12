@@ -5,13 +5,20 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.sql import exists
 from sqlalchemy.orm import joinedload
+from flask import request, current_app
 
-from db import db
+from datetime import datetime, time
 
-from models import TableInstance, TableType, Restaurant, Booking, BookingTable
-from schemas import TableSchema
+from project.db import db
+
+from project.models import TableInstance, TableType, Restaurant, Booking, BookingTable
+from project.schemas import TableSchema
+
+
 
 blp = Blueprint("tables", __name__, url_prefix="/api/admins/restaurants")
+
+
 
 
 def check_admin_role():
@@ -22,11 +29,13 @@ def check_admin_role():
 
 def verify_admin_ownership(admin_id, restaurant_id):
     is_owner = db.session.query(
-        exists().where(Restaurant.id == restaurant_id).where(Restaurant.admin_id == admin_id)
+        exists().where(Restaurant.id == restaurant_id).where(Restaurant.admin_id == admin_id).where(Restaurant.is_deleted==False)
     ).scalar()
 
     if not is_owner:
         abort(403, message="You do not have permission to modify this restaurant.")
+
+
 
 def verify_table_type_in_restaurant(restaurant_id, table_type_id):
     table_type_exists = db.session.query(
@@ -54,6 +63,7 @@ class TableListResource(MethodView):
 
         created_tables = []
         failed_tables = []
+        total_added_capacity = 0
 
         for data in tables_data:
             try:
@@ -67,12 +77,23 @@ class TableListResource(MethodView):
                     failed_tables.append({"data": data, "error": "table_type not found"})
                     continue
                 if data["capacity"] > table_type.maximum_capacity or data["capacity"] < table_type.minimum_capacity:
-                    failed_tables.append({"data": data, "error": "capacity is within the range"})
+                    failed_tables.append({"data": data, "error": "capacity is not within the range"})
+                    continue
+                
+                exists = TableInstance.query.join(TableType).filter(
+                    TableInstance.is_deleted == False,
+                    TableInstance.table_number == data["table_number"],
+                    TableType.restaurant_id == restaurant_id
+                ).first() is not None
+                
+                if exists:
+                    failed_tables.append({"data": data, "error": "A table with the same table number already exists in this restaurant"})
                     continue
                 
                 table = TableInstance(**data)
                 db.session.add(table)
                 created_tables.append(table)
+                total_added_capacity += data["capacity"]
             except IntegrityError as e:
                 db.session.rollback()
                 failed_tables.append({"data": data, "error": str(e.orig)})
@@ -225,6 +246,11 @@ class TableResource(MethodView):
             # If `table_type_id` is being updated, verify its validity
             if "table_type_id" in update_data:
                 verify_table_type_in_restaurant(restaurant_id, update_data["table_type_id"])
+                
+            if "is_available" in update_data:
+                if update_data["is_available"]:
+                    table.unavailable_from = None
+                
     
             # Update table fields dynamically
             for key, value in update_data.items():
@@ -281,7 +307,6 @@ class TableResource(MethodView):
             # Soft delete the table (instead of hard deleting)
             table.is_deleted = True
             db.session.commit()
-            print("finally here")
             return {"message": "Table deleted successfully", "status": 204}, 204
 
         except SQLAlchemyError as e:

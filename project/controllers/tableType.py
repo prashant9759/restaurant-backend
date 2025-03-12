@@ -3,12 +3,15 @@ from flask_smorest import Blueprint, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
-from flask import request
+from flask import request, current_app
+from sqlalchemy import func
 
-from db import db
-from models import TableType, TableShape, Restaurant
-from schemas import TableTypeSchema, UpdateFeatureSpecialitySchema
-from services.helper import *
+from datetime import datetime, time
+
+from project.db import db
+from project.models import TableType, TableShape, Restaurant
+from project.schemas import TableTypeSchema, UpdateFeatureSpecialitySchema
+from project.services.helper import *
 
 blp = Blueprint("table_types", __name__, url_prefix="/api/admins/restaurants")
 
@@ -188,14 +191,17 @@ class TableTypeResource(MethodView):  # Inherit from MethodView
         active_booking_exists = (
             db.session.query(BookingTable)
             .join(TableInstance, TableInstance.id == BookingTable.table_id)
-            .filter(TableInstance.table_type_id == table_type_id, Booking.status == "active")
+            .join(Booking, Booking.id == BookingTable.booking_id)  # Add this join!
+            .filter(
+                TableInstance.table_type_id == table_type_id,
+                Booking.status == "active"
+            )
             .first()
         )
 
         if active_booking_exists:
             abort(400, message="Cannot delete table type. Active bookings exist.")
-
-        # No active bookings, proceed with deletion
+            
         table_type.soft_delete()
         return {"message":"deletion successfull"}, 204
 

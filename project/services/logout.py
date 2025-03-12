@@ -1,5 +1,5 @@
-from models import TokenBlocklist
-from db import db
+from project.models import TokenBlocklist
+from project.db import db
 
 from datetime import timedelta
 from datetime import datetime

@@ -1,5 +1,5 @@
-from models import  *
-from db import db
+from project.models import  *
+from project.db import db
 
 from flask_jwt_extended import (
     create_access_token,
@@ -232,72 +232,9 @@ def update_password(item,data):
 
 
 
-def dailyStatsEntry(restaurant, today, weekday, app):
-    print(f"called for {restaurant.id}")
-    with app.app_context():
-        try:
-            # Get restaurant policy & operating hours for today
-            policy = restaurant.policy
-            operating_hours = restaurant.operating_hours[weekday] if restaurant.operating_hours else None
-
-            if not policy or not operating_hours:
-                return 
-
-            # Check if an entry already exists
-            existing_entry = DailyStats.query.filter_by(restaurant_id=restaurant.id, date=today).first()
-            if existing_entry:
-                print(f"entry already exists for {restaurant.id}")
-                return 
-
-            # Extract values
-            opening_time = max(operating_hours.opening_time, time(0, 0))  # Earliest 00:00
-            closing_time = min(operating_hours.closing_time, time(23, 59))  # Latest 23:59
-            reservation_duration = policy.reservation_duration  # In minutes
-            
-            print(f"{opening_time}, {closing_time}, {reservation_duration}")
-            # Calculate total slots available in the day
-            total_slots = (
-                (closing_time.hour * 60 + closing_time.minute  + reservation_duration  - 1) - 
-                (opening_time.hour * 60 + opening_time.minute )
-            ) // (reservation_duration )
-
-            # Calculate total active tables (tables marked as `is_accessible=True`)
-            active_occupancy = (
-                db.session.query(db.func.sum(TableInstance.capacity))
-                .join(TableType)  # Join TableInstance with TableType
-                .filter(
-                    TableType.restaurant_id == restaurant.id,  # Filter by restaurant_id from TableType
-                    TableType.is_deleted == False,  # Ensure TableType is not deleted
-                    TableInstance.is_available == True,  # Ensure TableInstance is accessible
-                    TableInstance.is_deleted == False  # Ensure TableInstance is not deleted
-                )
-                .scalar()  # Get single value instead of a tuple
-            ) or 0  # Default to 0 if there are no matching tables
 
 
-            total_active_occupancy = total_slots * active_occupancy
-            
-            print(f"{total_slots}, {active_occupancy}, {total_active_occupancy}")
-
-            # Create new entry
-            new_entry = DailyStats(
-                restaurant_id=restaurant.id,
-                date=today,
-                total_reservations=0,
-                total_cancelled_reservations=0,
-                total_revenue=0,
-                maximum_occupancy=total_active_occupancy,
-                reserved_occupancy=0,
-            )
-
-            db.session.add(new_entry)
-            db.session.commit()  # Commit only this entry
-
-        except Exception as e:
-            db.session.rollback()  # Rollback only if an error occurs for this restaurant
-            print(f"Error processing restaurant {restaurant.id}: {e}")
-
-
+    
 
 # Haversine formula for calculating distance
 

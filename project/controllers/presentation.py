@@ -6,14 +6,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import  joinedload, load_only
 from collections import defaultdict
 
-from scheduler import scheduler
+from project.scheduler import scheduler
 
-from models import *
-from schemas import  *
-from services.helper import *
-from services.helper import generate_time_slots
+from project.models import *
+from project.schemas import  *
+from project.services.helper import *
+from project.services.helper import generate_time_slots
 
-from db import db
+from project.db import db
 from datetime import datetime, timedelta
 
 

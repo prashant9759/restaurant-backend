@@ -1,7 +1,7 @@
 from enum import unique, Enum
 
 
-from db import db
+from project.db import db
 from datetime import datetime
 from sqlalchemy import UniqueConstraint,Text
 from sqlalchemy.dialects.mysql import JSON
@@ -378,7 +378,6 @@ class TableType(db.Model):
 
         db.session.commit()
     
-    __table_args__ = (UniqueConstraint('name', 'restaurant_id', name='_name_restaurant_uc'),)
     
     features = db.relationship("Feature", secondary=tableType_features, backref="table_types")
     restaurant = db.relationship("Restaurant", backref="table_types")
@@ -417,7 +416,6 @@ class TableInstance(db.Model):
         self.deleted_at = datetime.utcnow()
         db.session.commit()
         
-    __table_args__ = (UniqueConstraint('table_number', 'table_type_id', name='_table_number_table_type_id_uc'),)
     
     # Eagerly load table_type
     table_type = db.relationship('TableType', backref='tables', lazy='select')
@@ -444,6 +442,7 @@ class Booking(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     guest_count = db.Column(db.Integer, nullable = False)
+    total_cost = db.Column(db.Integer, default=0)
     status = db.Column(db.String(30), nullable = False, default="active")
     
     tables = db.relationship("BookingTable", back_populates="booking")
@@ -453,12 +452,14 @@ class Booking(db.Model):
     restaurant = db.relationship("Restaurant", backref="bookings")
 
 
+
 class BookingTable(db.Model):  
     __tablename__ = "booking_table"
 
     id = db.Column(db.Integer, primary_key=True)
     booking_id = db.Column(db.Integer, db.ForeignKey("booking.id"), nullable=False)
     table_id = db.Column(db.Integer, db.ForeignKey("table_instance.id"), nullable=False)
+    cost = db.Column(db.Integer, default = 0)
 
     booking = db.relationship("Booking", back_populates="tables")
     table = db.relationship("TableInstance", backref="bookings")
@@ -528,6 +529,7 @@ class RestaurantReview(db.Model):
         }
 
 
+
 class DailyStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
@@ -537,8 +539,28 @@ class DailyStats(db.Model):
     total_revenue = db.Column(db.Float, default=0.0)
     maximum_occupancy = db.Column(db.Integer, default=0)
     reserved_occupancy = db.Column(db.Integer, default=0)
+    total_refund = db.Column(db.Float, default=0.0)  # Total refund issued for cancellations
 
     __table_args__ = (db.UniqueConstraint('restaurant_id', 'date', name='unique_daily_stats'),)  # Ensures uniqueness
+
+
+
+class HourlyStats(db.Model):
+    __tablename__ = 'hourly_stats'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    time = db.Column(db.String(5), nullable=False)  # Stores time as 'HH:MM
+    total_reservations = db.Column(db.Integer, default=0)  # Confirmed bookings
+    total_cancelled_reservations = db.Column(db.Integer, default=0)
+    reserved_occupancy = db.Column(db.Integer, default=0)  # Total seats booked
+    maximum_occupancy = db.Column(db.Integer, default=0)  # Total available seats
+    total_revenue = db.Column(db.Float, default=0.0)
+    total_refund = db.Column(db.Float, default=0.0)  # Total refund issued for cancellations
+    
+    __table_args__ = (db.UniqueConstraint('restaurant_id', 'date', 'time', name='unique_hourly_stats'),)
+
 
 
 

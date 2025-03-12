@@ -6,11 +6,11 @@ from flask_jwt_extended import create_access_token, create_refresh_token, get_jw
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from passlib.hash import pbkdf2_sha256
 
-from models import Admin
-from db import db
-from schemas import AdminSchema, LoginSchema, ChangePasswordSchema
-from services.logout import logout_logic
-from services.helper import *
+from project.models import Admin
+from project.db import db
+from project.schemas import AdminSchema, LoginSchema, ChangePasswordSchema
+from project.services.logout import logout_logic
+from project.services.helper import *
 
 blp = Blueprint("Admins", __name__, description="Operations on admins")
 

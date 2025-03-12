@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 from flask import request
 
 
-from models import (
+from project.models import (
     Restaurant,
     CuisineType,
     FoodPreferenceType,
@@ -20,8 +20,8 @@ from models import (
     Feature,
     Speciality
 )
-from db import db
-from schemas import (
+from project.db import db
+from project.schemas import (
     RestaurantSchema,
     RestaurantPolicySchema,
     CuisineUpdateSchema,
@@ -29,7 +29,7 @@ from schemas import (
     AddressSchema,
     UpdateFeatureSpecialitySchema
 )
-from services.helper import *
+from project.services.helper import *
 
 blp = Blueprint("Restaurants", __name__, description="Operations on Restaurants",
                 url_prefix="/api/admins/restaurants")

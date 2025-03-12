@@ -8,7 +8,7 @@ from marshmallow import (
     validates_schema
 )
 
-from models import (
+from project.models import (
     CuisineEnum,
     TableShape,
     FoodPreferenceEnum,

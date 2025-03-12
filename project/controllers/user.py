@@ -10,11 +10,11 @@ from sqlalchemy import exists
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from passlib.hash import pbkdf2_sha256
 
-from models import User, Restaurant, RestaurantLike, RestaurantReview
-from db import db
-from schemas import UserSchema, LoginSchema, ChangePasswordSchema, RestaurantReviewSchema   
-from services.logout import logout_logic
-from services.helper import *
+from project.models import User, Restaurant, RestaurantLike, RestaurantReview
+from project.db import db
+from project.schemas import UserSchema, LoginSchema, ChangePasswordSchema, RestaurantReviewSchema   
+from project.services.logout import logout_logic
+from project.services.helper import *
 
 from datetime import datetime
 

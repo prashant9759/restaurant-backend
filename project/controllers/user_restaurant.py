@@ -6,14 +6,17 @@ from flask import current_app
 
 from sqlalchemy.exc import  SQLAlchemyError
 from sqlalchemy.orm import joinedload
+from sqlalchemy.sql.functions import coalesce
 
-from scheduler import scheduler
 
-from models import *
-from schemas import  *
-from services.helper import *
+from project.scheduler import scheduler
 
-from db import db
+from project.models import *
+from project.schemas import  *
+from project.services.helper import *
+from project.services.tasks import update_hourly_entry
+
+from project.db import db
 from datetime import datetime, timedelta
 import pytz
 
@@ -266,10 +269,10 @@ class CreateBooking(MethodView):
         if not restaurant:
             abort(404, message="Restaurant not found")
 
-        policy = restaurant.policy  # Access the policy directly
-        if not restaurant or not policy:
+        if not restaurant or not restaurant.policy:
             return {"message": "Restaurant or Restaurant policy not found."}, 404
 
+        policy = restaurant.policy  # Access the policy directly
 
         # Step 5: Validate Table Types
         table_type_ids = [t["table_type_id"] for t in table_type_info]
@@ -306,10 +309,11 @@ class CreateBooking(MethodView):
         # Step 8: Assign Available Tables to Booking
         booked_tables = []
         table_details = {}
-
+        total_cost = 0
         for table_type in table_type_info:
             type_id = table_type["table_type_id"]
             requested_count = table_type.get('count',1)
+            cost = table_types[type_id].reservation_fees
 
             # Fetch available tables
             available_tables = db.session.execute(
@@ -329,18 +333,19 @@ class CreateBooking(MethodView):
                 "table_type_info": table_types[type_id].to_dict(),
                 "tables": [table.to_dict() for table in available_tables]
             }
-
+            total_cost += cost*requested_count
             # Prepare BookingTable instances
-            booked_tables.extend([BookingTable(table_id=table.id) for table in available_tables])
+            booked_tables.extend([BookingTable(table_id=table.id, cost=cost) for table in available_tables])
 
         # Associate tables using SQLAlchemy relationship
         new_booking.tables = booked_tables
 
         # Step 9: Commit Transaction
         try:
+            new_booking.total_cost = total_cost
             db.session.add(new_booking)
             db.session.commit()
-            
+            update_hourly_entry.delay(new_booking.id, False)
             utc_tz = pytz.utc
 
             start_datetime = datetime.combine(date, datetime.strptime(start_time, "%H:%M").time())
@@ -362,7 +367,7 @@ class CreateBooking(MethodView):
 
 
             return {
-                "message": "Booking created successfully",
+                "message": f"Booking created successfully u will have to pay {total_cost} rupees",
                 "booking_details": {
                     "booking_id": new_booking.id,
                     "user_id": new_booking.user_id,
@@ -414,9 +419,10 @@ class CancelBooking(MethodView):
         if not restaurant:
             abort(404, message="Restaurant not found")
 
-        policy = restaurant.policy  # Access the policy directly
-        if not restaurant or not policy:
+        if not restaurant or not restaurant.policy:
             return {"message": "Restaurant or Restaurant policy not found."}, 404
+        
+        policy = restaurant.policy  # Access the policy directly
 
         free_cancellation_window = restaurant.policy.free_cancellation_window  # Time in minutes
         late_cancellation_fee = restaurant.policy.late_cancellation_fee
@@ -430,10 +436,10 @@ class CancelBooking(MethodView):
         booking_datetime = local_tz.localize(booking_datetime)
 
         # Ensure cancellation is within allowed time
+        penalty = 0
         min_cancellation_time = booking_datetime - timedelta(minutes=free_cancellation_window)
         if now >= min_cancellation_time:
-            total_cost = booking.guest_count*late_cancellation_fee
-            return {"message": f"Booking is canceled you will be charged {total_cost}"}, 200
+            penalty = booking.guest_count*late_cancellation_fee
 
         # Update status to 'canceled'
         booking.status = "cancelled"
@@ -445,6 +451,7 @@ class CancelBooking(MethodView):
         # Commit changes
         try:
             db.session.commit()
+            update_hourly_entry(booking_id,True ,penalty)
             # **Step 1: Remove Scheduled Job**
             job_id = f"complete_booking_{booking.id}"
             if scheduler.get_job(job_id):  
@@ -452,7 +459,7 @@ class CancelBooking(MethodView):
                 print(f"✅ Removed scheduled job: {job_id}")
             else:
                 print(f"✅ couldn't find job: {job_id}")
-            return {"message": "Booking canceled successfully."}, 200
+            return {"message": f"Booking is canceled you will be charged {coalesce(penalty,0)} rupees"}, 200
         except SQLAlchemyError:
             db.session.rollback()
             return {"message": "Error occurred while canceling the booking."}, 500
