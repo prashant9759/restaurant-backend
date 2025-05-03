@@ -3,15 +3,12 @@ from flask_smorest import Blueprint, abort
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
-from flask import request, current_app
-from sqlalchemy import func
+from flask import request
 
-from datetime import datetime, time
-
-from project.db import db
-from project.models import TableType, TableShape, Restaurant
-from project.schemas import TableTypeSchema, UpdateFeatureSpecialitySchema
-from project.services.helper import *
+from app import db
+from app.models import TableType,  Restaurant
+from app.schemas import TableTypeSchema, UpdateFeatureSpecialitySchema
+from app.services.helper import *
 
 blp = Blueprint("table_types", __name__, url_prefix="/api/admins/restaurants")
 
@@ -63,13 +60,13 @@ class TableTypeListResource(MethodView):  # Inherit from MethodView
         """Create multiple table types."""
         check_admin_role()
         admin_id = get_jwt_identity()
-
+        verify_admin_ownership(admin_id, restaurant_id)
+        
         created_table_types = []
         failed_entries = []
 
         try:
             for data in table_types_data:
-                verify_admin_ownership(admin_id, restaurant_id)
                 data["restaurant_id"] = restaurant_id
 
                 # Check if a non-deleted table type with the same name already exists
@@ -92,7 +89,6 @@ class TableTypeListResource(MethodView):  # Inherit from MethodView
                     feature_instances = [Feature(name=name) for name in feature_names]
 
                     # Convert shape to Enum
-                    data["shape"] = TableShape(data["shape"])
                     table_type = TableType(**data, features=feature_instances)
                     db.session.add(table_type)
                     created_table_types.append(table_type)

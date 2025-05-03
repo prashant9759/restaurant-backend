@@ -8,14 +8,12 @@ from marshmallow import (
     validates_schema
 )
 
-from project.models import (
-    CuisineEnum,
-    TableShape,
-    FoodPreferenceEnum,
-)
 from sqlalchemy import select
 import re
 from enum import Enum
+from datetime import datetime
+
+
 
 class Weekday(Enum):
     MONDAY = "Monday"
@@ -47,15 +45,10 @@ class TableTypeSchema(Schema):
     name = fields.Str(required=True, validate=validate.Length(min=1, max=50))
     minimum_capacity = fields.Int(required=True, validate=validate.Range(min=1))
     maximum_capacity = fields.Int(required=True, validate=validate.Range(min=1))
-    reservation_fees = fields.Float(required=False, validate=validate.Range(min=1))
     description = fields.Str(validate=validate.Length(max=200))
     cover_image = fields.Str(validate=validate.Length(max=200))
     features = fields.List(fields.Str(), required=False)  # New features field (List of Strings)
-    shape = fields.Str(
-        required=True,
-        validate=validate.OneOf([shape.value for shape in TableShape]),
-        description="Shape of the table (e.g., 'Round', 'Square', 'Rectangle', 'Oval')"
-    )
+    shape = fields.Str(required=True)
 
     @post_load
     def validate_table_type(self, data, **kwargs):
@@ -66,7 +59,7 @@ class TableTypeSchema(Schema):
 
         
 
-class UserSchema(Schema):
+class AdminSchema(Schema):
     id = fields.Int(dump_only=True)
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=50))
     middle_name = fields.Str(required=False, validate=validate.Length(min=1, max=50))
@@ -104,20 +97,26 @@ class UserSchema(Schema):
             raise ValidationError({"confirm_password": "Passwords do not match."})
 
 
+class AdminEmailVerificationSchema(Schema):
+    email = fields.Email(required=True)
+    verification_code = fields.String(required=True)
+    
+class UserEmailVerificationSchema(AdminEmailVerificationSchema):
+    restaurant_id = fields.Int(required=True)
+    role = fields.Str(
+        required=True,
+        validate=validate.OneOf(["user", "staff"]),
+        error_messages={"validator_failed": "Role must be either 'user' or 'staff'."}
+    )
     
 
-class AdminSchema(UserSchema):
-    pass
-
-
-class AddressSchema(Schema):
-    id = fields.Int(dump_only=True)
-    street = fields.Str(required=True)
-    city = fields.Str(required=True)
-    state = fields.Str(required=True)
-    postal_code = fields.Str(required=True)
-    latitude = fields.Float(required=True)
-    longitude = fields.Float(required=True)
+class UserSchema(AdminSchema):
+    restaurant_id = fields.Int(required=True)
+    role = fields.Str(
+        required=True,
+        validate=validate.OneOf(["user", "staff"]),
+        error_messages={"validator_failed": "Role must be either 'user' or 'staff'."}
+    )
 
 
 
@@ -156,6 +155,7 @@ class RestaurantOperatingHoursSchema(Schema):
 
 
 
+
 class RestaurantPolicySchema(Schema):
     id = fields.Int(dump_only=True)
 
@@ -163,14 +163,6 @@ class RestaurantPolicySchema(Schema):
     max_advance_days = fields.Int(required=True, validate=validate.Range(min=0))
     reservation_duration = fields.Int(required=True, validate=validate.Range(min=1))
 
-    free_cancellation_window = fields.Int(
-        required=True, validate=validate.Range(min=0),
-        description="Time in minutes before a reservation when cancellation is free."
-    )
-    late_cancellation_fee = fields.Float(
-        required=True, validate=validate.Range(min=0),
-        description="Fee per person for late cancellations or no-shows."
-    )
 
 
 
@@ -189,17 +181,10 @@ class RestaurantSchema(Schema):
             error="Invalid phone number. Must be in E.164 format (e.g., +14155552671)."
         )
     )
-    cuisines = fields.List(
-        fields.String(required=True),
-        validate=validate.Length(min=1, error="At least one cuisine must be provided.")
-    )
-    food_preferences = fields.List(
-        fields.String(required=True),
-        validate=validate.Length(min=1, error="At least one food preference must be provided.")
-    )
 
     # Nested Fields
-    address = fields.Nested(AddressSchema, required=True)
+    address = fields.String(required=True)
+    timezone = fields.String(required=True)
     policy = fields.Nested(RestaurantPolicySchema, required=True)
     operating_hours = fields.List(fields.Nested(RestaurantOperatingHoursSchema), required=True)
 
@@ -210,59 +195,6 @@ class RestaurantSchema(Schema):
 
 
 
-class CuisineUpdateSchema(Schema):
-    add = fields.List(
-        fields.String(validate=validate.OneOf([cuisine.value for cuisine in CuisineEnum])),
-        required=False,
-        missing=[]
-    )
-    remove = fields.List(
-        fields.String(validate=validate.OneOf([cuisine.value for cuisine in CuisineEnum])),
-        required=False,
-        missing=[]
-    )
-
-    @validates_schema
-    def validate_cuisine_conflict(self, data, **kwargs):
-        """Ensure cuisines are not present in both add & remove lists."""
-        add_cuisines = set(data.get("add", []))
-        remove_cuisines = set(data.get("remove", []))
-        conflict = add_cuisines & remove_cuisines
-
-        if conflict:
-            raise ValidationError(f"Cuisines cannot be both added and removed: {', '.join(conflict)}")
-
-
-class FoodPreferenceUpdateSchema(Schema):
-    add = fields.List(
-        fields.String(validate=validate.OneOf([food_preference.value for food_preference in FoodPreferenceEnum])),
-        required=False,
-        missing=[]
-    )
-    remove = fields.List(
-        fields.String(validate=validate.OneOf([food_preference.value for food_preference in FoodPreferenceEnum])),
-        required=False,
-        missing=[]
-    )
-
-    @validates_schema
-    def validate_food_preference_conflict(self, data, **kwargs):
-        """Ensure food_preferences are not present in both add & remove lists."""
-        add_food_preferences = set(data.get("add", []))
-        remove_food_preferences = set(data.get("remove", []))
-        conflict = add_food_preferences & remove_food_preferences
-
-        if conflict:
-            raise ValidationError(f"FoodPreferences cannot be both added and removed: {', '.join(conflict)}")
-
-
-
-class TableTypeInfoSchema(Schema):
-    table_type_id = fields.Int(required=True)
-    count = fields.Int(required=False, validate=validate.Range(min=1), default = 1)
-
-
-
 class BookingRequestSchema(Schema):
     guest_count = fields.Int(required=True, validate=validate.Range(min=1))
     date = fields.Date(required=True)
@@ -270,9 +202,13 @@ class BookingRequestSchema(Schema):
         required=True,
         validate=validate.Regexp(r"^(?:[01]\d|2[0-3]):[0-5]\d$", error="Invalid time format. Use HH:MM")
     )
-    table_type_info = fields.List(fields.Nested(TableTypeInfoSchema), required=True, validate=validate.Length(min=1))
-
-
+    table_type_info = fields.List(
+        fields.Integer(strict=True),
+        required=False,
+        validate=validate.Length(min=1)
+    )
+    customer_name = fields.Str(required=False)
+    customer_phone = fields.Str(required=False)
 
 
 class ChangePasswordSchema(Schema):
@@ -323,6 +259,44 @@ class UpdateFeatureSpecialitySchema(Schema):
 
 
     
-class LoginSchema(Schema):
+class AdminLoginSchema(Schema):
     email = fields.Email(required=True)
     password = fields.Str(required=True)
+    
+class UserLoginSchema(AdminLoginSchema):
+    restaurant_id = fields.Int(required=True)
+    role = fields.Str(
+        required=True,
+        validate=validate.OneOf(["user", "staff"]),
+        error_messages={"validator_failed": "Role must be either 'user' or 'staff'."}
+    )
+    
+
+
+class FoodOfferingPeriodSchema(Schema):
+    name = fields.Str(required=True)
+    start_time = fields.Str(required=True, example="08:00")
+    end_time = fields.Str(required=True, example="11:30")
+
+    @validates_schema
+    def validate_times(self, data, **kwargs):
+        try:
+            start = datetime.strptime(data["start_time"], "%H:%M").time()
+            end = datetime.strptime(data["end_time"], "%H:%M").time()
+        except ValueError:
+            raise ValidationError("Invalid time format. Use HH:MM.", field_name="start_time")
+
+        if start >= end:
+            raise ValidationError("Start time must be before end time.", field_name="start_time")
+
+
+
+
+class FoodDietaryTypeSchema(Schema):
+    name = fields.Str(required=True)
+    description = fields.Str()
+
+
+
+
+

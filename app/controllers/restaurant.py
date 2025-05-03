@@ -11,25 +11,21 @@ from sqlalchemy.orm import joinedload
 from flask import request
 
 
-from project.models import (
+from app.models import (
     Restaurant,
-    CuisineType,
-    FoodPreferenceType,
     RestaurantPolicy,
     RestaurantOperatingHours,
     Feature,
     Speciality
 )
-from project.db import db
-from project.schemas import (
+from app import db
+from app.schemas import (
     RestaurantSchema,
     RestaurantPolicySchema,
-    CuisineUpdateSchema,
-    FoodPreferenceUpdateSchema,
-    AddressSchema,
-    UpdateFeatureSpecialitySchema
+    UpdateFeatureSpecialitySchema,
+    RestaurantOperatingHoursSchema
 )
-from project.services.helper import *
+from app.services.helper import *
 
 blp = Blueprint("Restaurants", __name__, description="Operations on Restaurants",
                 url_prefix="/api/admins/restaurants")
@@ -56,7 +52,11 @@ def handle_item_update(restaurant_id, data, item_name, Model):
     admin_id = get_jwt_identity()
 
     # Fetch restaurant and check permission
-    restaurant = Restaurant.query.filter_by(id=restaurant_id).first_or_404()
+    restaurant = Restaurant.query.filter(
+        Restaurant.id == restaurant_id,
+        Restaurant.is_deleted == False
+    ).first_or_404()
+
     if str(restaurant.admin_id) != admin_id:
         abort(403, message="You do not have permission to modify this restaurant.")
 
@@ -134,35 +134,13 @@ class AdminList(MethodView):
                     Restaurant.is_deleted == False
                 )
             ).scalar()
+            
 
             if phone_exists:
                 abort(
                     400, message="Phone number is already taken by another restaurant.")
 
         admin_id = get_jwt_identity()
-
-        address_field = manage_address_field(data)
-
-        # Extract and process cuisines
-        cuisine_names = data.pop("cuisines", [])
-        cuisine_instances = CuisineType.query.filter(
-            CuisineType.name.in_(cuisine_names)).all()
-
-        if len(cuisine_instances) != len(cuisine_names):
-            missing = set(cuisine_names) - {c.name for c in cuisine_instances}
-            abort(
-                400, message=f"Invalid cuisines provided: {', '.join(missing)}")
-
-        # Extract and process food preferences
-        food_preference_names = data.pop("food_preferences", [])
-        food_preference_instances = FoodPreferenceType.query.filter(
-            FoodPreferenceType.name.in_(food_preference_names)).all()
-
-        if len(food_preference_instances) != len(food_preference_names):
-            missing = set(food_preference_names) - \
-                {c.name for c in food_preference_instances}
-            abort(
-                400, message=f"Invalid foodPreferences provided: {', '.join(missing)}")
 
         # Extract and create specialities
         speciality_names = data.pop("specialities", [])
@@ -208,9 +186,6 @@ class AdminList(MethodView):
                 admin_id=admin_id,
                 policy=policy,
                 **data,
-                **address_field,
-                cuisines=cuisine_instances,
-                food_preferences=food_preference_instances,
                 operating_hours=operating_hours_instances,  # Add working hours
                 specialities=speciality_instances,  # Assign new specialities
                 features=feature_instances  # Assign new features
@@ -273,8 +248,7 @@ class RestaurantSelf(MethodView):
             abort(403, message="You do not have permission to modify this restaurant.")
 
         # Remove unwanted fields (cuisines, address, policy) before updating
-        restricted_fields = {"cuisines", "address",
-                             "policy", "food_preferences"}
+        restricted_fields = {"policy","operating_hours"}
         filtered_data = {key: value for key, value in update_data.items(
         ) if key not in restricted_fields}
 
@@ -312,7 +286,7 @@ class RestaurantSelf(MethodView):
             abort(403, message="You do not have permission to delete this restaurant.")
 
         restaurant.soft_delete()
-        return {"message": "User deleted succefully", "status": 204}, 204
+        return {"message": "Restaurant deleted succefully", "status": 204}, 204
 
 
 @blp.route("/all")
@@ -376,43 +350,56 @@ class RestaurantPolicyResource(MethodView):
         }, 200
 
 
-@blp.route("/<int:restaurant_id>/cuisines")
-class RestaurantCuisineResource(MethodView):
+
+@blp.route("/<int:restaurant_id>/operating-hours")
+class RestaurantOperatingHoursView(MethodView):
 
     @jwt_required()
-    @blp.arguments(CuisineUpdateSchema)
-    def patch(self, cuisine_data, restaurant_id):
-        """Add or remove cuisines from a restaurant."""
-        return handle_item_update(restaurant_id, cuisine_data, "cuisines", CuisineType)
-
-
-@blp.route("/<int:restaurant_id>/food_preferences")
-class RestaurantFoodPreferenceResource(MethodView):
-
-    @jwt_required()
-    @blp.arguments(FoodPreferenceUpdateSchema)
-    def patch(self, food_preference_data, restaurant_id):
-        """Add or remove food_preferences from a restaurant."""
-        return handle_item_update(restaurant_id, food_preference_data, "food_preferences", FoodPreferenceType)
-
-
-@blp.route("/<int:restaurant_id>/address")
-class RestaurantAddressResource(MethodView):
-
-    @jwt_required()
-    @blp.arguments(AddressSchema(partial=True))
-    def patch(self, data, restaurant_id):
-        """Partially update the restaurant address."""
+    @blp.arguments(RestaurantOperatingHoursSchema(many=True))
+    def put(self, hours_data, restaurant_id):
         check_admin_role()
-        current_admin_id = get_jwt_identity()
+        admin_id = get_jwt_identity()
+        
+        restaurant = db.session.query(Restaurant)\
+            .options(joinedload(Restaurant.operating_hours))\
+            .filter(Restaurant.id == restaurant_id,
+                    Restaurant.is_deleted==False,
+                    Restaurant.admin_id==admin_id
+                )\
+            .first()
 
-        restaurant = Restaurant.query.get_or_404(restaurant_id)
+        if not restaurant:
+            abort(404, message="Restaurant not found.")
 
-        # Verify restaurant ownership
-        if str(restaurant.admin_id) != current_admin_id:
-            abort(
-                403, message="You do not have permission to modify this restaurant policy.")
-        return update_address(restaurant, data, "restaurant")
+        existing_hours = {hour.day_of_week: hour for hour in restaurant.operating_hours}
+
+        for entry in hours_data:
+            day = entry["day_of_week"]
+            opening_time = entry["opening_time"]
+            closing_time = entry["closing_time"]
+
+            if day in existing_hours:
+                # Update existing entry
+                existing = existing_hours[day]
+                existing.opening_time = opening_time
+                existing.closing_time = closing_time
+            else:
+                # Add new entry
+                new_hour = RestaurantOperatingHours(
+                    restaurant_id=restaurant.id,
+                    day_of_week=day,
+                    opening_time=opening_time,
+                    closing_time=closing_time
+                )
+                db.session.add(new_hour)
+
+        db.session.commit()
+
+        return {
+            "message": "Operating hours updated successfully.",
+            "updated_hours": [hour.to_dict() for hour in restaurant.operating_hours]
+        }, 200
+
 
 
 @blp.route("/<int:restaurant_id>/update-features-specialities")
@@ -507,7 +494,6 @@ def update_feature( restaurant_id , feature_id):
     admin_id = get_jwt_identity()
     
     restaurant = db.session.query(Restaurant)\
-        .options(joinedload(Restaurant.features), joinedload(Restaurant.specialities))\
         .filter(Restaurant.id == restaurant_id, Restaurant.is_deleted == False,Restaurant.admin_id == admin_id )\
         .first()
 
@@ -545,7 +531,6 @@ def update_speciality( restaurant_id, speciality_id):
     check_admin_role()
     admin_id = get_jwt_identity()
     restaurant = db.session.query(Restaurant)\
-        .options(joinedload(Restaurant.features), joinedload(Restaurant.specialities))\
         .filter(Restaurant.id == restaurant_id, Restaurant.is_deleted == False,Restaurant.admin_id == admin_id )\
         .first()
 

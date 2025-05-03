@@ -1,5 +1,6 @@
-from project.models import  *
-from project.db import db
+from app.models import  *
+from app import db
+from app.schemas import WEEKDAYS
 
 from flask_jwt_extended import (
     create_access_token,
@@ -8,12 +9,49 @@ from flask_jwt_extended import (
 from passlib.hash import pbkdf2_sha256
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from flask_smorest import abort
-from math import radians, sin, cos, sqrt, atan2
 
 from datetime import datetime, timedelta,time
 
-# Business Logic Functions for CRUD operations
 
+def verify_email_verification_code(Model,model_name,data):
+    email = data["email"]
+    code = data["verification_code"]
+    # Start building the query
+    query = Model.query.filter_by(email=email, is_deleted=False)
+
+    # If restaurant_id is in data, add it to the query filter
+    if "restaurant_id" in data:
+        query = query.filter_by(restaurant_id=data["restaurant_id"])
+    
+    if "role" in data:
+        query = query.filter_by(role=data["role"])
+
+    item = query.first()
+    if not item:
+        return {"message": f"{model_name.upper()} not found."}, 404
+    if item.is_email_verified:
+        return {"message": "Email already verified."}, 400
+    if item.email_verification_code != code:
+        return {"message": "Invalid verification code."}, 400
+    # Check expiry (10 minutes)
+    expiry_time = item.verification_code_sent_at + timedelta(minutes=10)
+    if datetime.utcnow() > expiry_time:
+        return {"message": "Verification code has expired."}, 400
+    # Update verification status
+    item.is_email_verified = True
+    item.email_verification_code = None
+    db.session.commit()
+    # Generate tokens
+    role = model_name
+    if "role" in data:
+        role = data["role"]
+    access_token = create_access_token(identity=str(item.id), additional_claims={"role": f"{role}"}, fresh=True)
+    refresh_token = create_refresh_token(identity=str(item.id),additional_claims={"role": f"{role}"})
+    return {
+                "message": "Email verified successfully.",
+                "access_token":access_token,
+                "refresh_token":refresh_token
+        }, 200
 
 
 
@@ -30,36 +68,13 @@ def generate_time_slots(opening_time, closing_time, reservation_duration):
 
     return slots
 
-# 
-def manage_address_field(data):
-    # Extract address data from hospital_data
-    address = data.pop("address")
-
-    # Create and save the address in the Address table
-    city_state = CityStateModel.query.filter_by(
-        postal_code=address["postal_code"]
-    ).first()
-    if not city_state:
-        city_state = CityStateModel(
-        city=address["city"],
-        state=address["state"],
-        postal_code=address["postal_code"]
-    )
-    field = {"city_state": city_state,"street": address["street"],"latitude":                               address["latitude"],"longitude": address["longitude"]}
-    return field
-
 # Create a new entry and generate tokens   
-def create_logic(data, Model, entity):
-    """Business logic to create a new entry and generate tokens."""
+def create_logic(data, Model, entity, extra_msg=""):
+    """Business logic to create a new entry"""
     
-    field = {}
-    
-    if 'address' in data:
-        # Extract address data from hospital_data
-        field = manage_address_field(data)
     
     data["password"] = pbkdf2_sha256.hash(data["password"])
-    item = Model(**data, **field)
+    item = Model(**data)
     
     try:
         db.session.add(item)
@@ -80,15 +95,9 @@ def create_logic(data, Model, entity):
         print("error",e)
         abort(500, message=f"An error occurred while creating the entity.")
     
-    # Generate tokens
-    access_token = create_access_token(identity=str(item.id), additional_claims={"role": f"{entity}"}, fresh=True)
-    refresh_token = create_refresh_token(identity=str(item.id),additional_claims={"role": f"{entity}"})
-    
     return {
         f"{entity}": item.to_dict(),
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "message": f"{entity.capitalize()} created successfully",
+        "message": f"{entity.capitalize()} created successfully"+extra_msg,
         "status": 201
     } , 201
 
@@ -110,60 +119,20 @@ def get_item_by_id_logic(id, Model, entity):
         return abort(404, message=f"{entity} not found.")
     return {f"{entity}": item.to_dict(), "message": f"{entity} fetched successfully", "status": 200}, 200
  
-# Update an item & address
-
-def update_address(item, data, entity):
-    try:
-        item.street = data.get("street", item.street)
-        item.latitude = data.get("latitude", item.latitude)
-        item.longitude = data.get("longitude", item.longitude)
-
-        # Update or create CityStateModel and assign it directly
-        city_state = CityStateModel.query.filter_by(postal_code=data["postal_code"]).first()
-        if not city_state:
-            city_state = CityStateModel(
-                city=data['city'],
-                state=data['state'],
-                postal_code=data["postal_code"]
-            )
-            db.session.add(city_state)  # Add new city_state to session
-        
-        
-        item.city_state = city_state  # Assign the object directly
-        db.session.commit()
-
-        return {
-            "address": {
-                "street": item.street,
-                "latitude": item.latitude,
-                "longitude": item.longitude,
-                "city": item.city_state.city if item.city_state else None,
-                "state": item.city_state.state if item.city_state else None,
-                "postal_code": item.city_state.postal_code if item.city_state else None
-            },
-            "message": f"{entity.capitalize()}'s address updated successfully",
-            "status": 200
-        }, 200
-
-    except Exception as e:  # Catch exceptions properly
-        db.session.rollback()  # Rollback in case of error
-        abort(500, message=f"An error occurred while updating the address of {entity}. Error: {str(e)}")
 
 
 
-def update_logic(item, data, entity):
+def update_logic(item, data, entity, extra_msg=""):
     try:
         # Dynamically update fields based on model attributes
         for key, value in data.items():
-            if key == "shape":
-                setattr(item, key, TableShape(value)) 
-            elif hasattr(item, key):
+            if hasattr(item, key):
                 setattr(item, key, value)
 
         db.session.commit()
         return {
             f"{entity}": item.to_dict(),
-            "message": f"{entity.capitalize()} updated successfully",
+            "message": f"{entity.capitalize()} updated successfully"+extra_msg,
             "status": 200
         }, 200
 
@@ -185,12 +154,31 @@ def update_logic(item, data, entity):
 
 def login_logic(login_data, Model, entity):
     """Business logic to log in a user."""
-    item = Model.query.filter_by(email=login_data["email"],is_deleted=False).first_or_404()
+    query = Model.query.filter_by(
+        email=login_data["email"],is_deleted=False
+        )
+    
+    if "restaurant_id" in login_data:
+        # .filter() is better here to combine with existing filters
+        query = query.filter(Model.restaurant_id == login_data["restaurant_id"])
+        
+    if 'role' in login_data:
+        query = query.filter(Model.role == login_data["role"])
+        
+    item = query.first_or_404()
+    
+    if not item.is_email_verified:
+        abort(400, message="Email not verified")
+    
     if not item or not pbkdf2_sha256.verify(login_data["password"], item.password):
         return abort(401, message="Invalid email or password.")
     
-    access_token = create_access_token(identity=str(item.id), additional_claims={"role": f"{entity}"}, fresh=True)
-    refresh_token = create_refresh_token(identity=str(item.id),additional_claims={"role": f"{entity}"})
+    role = entity
+    if "role" in login_data:
+        role = login_data["role"]
+    
+    access_token = create_access_token(identity=str(item.id), additional_claims={"role": f"{role}"}, fresh=True)
+    refresh_token = create_refresh_token(identity=str(item.id),additional_claims={"role": f"{role}"})
     
     return {
         "message": "Login successful",
@@ -217,7 +205,6 @@ def update_password(item,data):
     # Check if current password is correct
     try:
         if not item or not pbkdf2_sha256.verify(data["current_password"], item.password):
-            print("here")
             return { "message":"Wrong password Provided.","status":401},401
 
         # Update password
@@ -231,21 +218,19 @@ def update_password(item,data):
         return {"error": str(e)}, 500  # Generic error handling
 
 
+def get_opening_closing_time(date_obj, operating_hours):
+    # Step 1: Get the day name
+    day_name = date_obj.strftime("%A")  # e.g., 'Monday'
+    day_no = WEEKDAYS[day_name]
 
-
+    # Step 2: Find opening and closing times
+    for day_info in operating_hours:
+        if day_info.day_of_week == day_no:
+            return day_info.opening_time, day_info.closing_time
 
     
-
-# Haversine formula for calculating distance
-
-def haversine(lat1, lon1, lat2, lon2):
-    """Calculate the great-circle distance between two points on the Earth in km."""
-    R = 6371  # Earth's radius in km
-    dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
-    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
+    # If not found
+    return None, None
 
 
 

@@ -4,15 +4,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.sql import exists
-from sqlalchemy.orm import joinedload
-from flask import request, current_app
 
-from datetime import datetime, time
 
-from project.db import db
+from app import db
 
-from project.models import TableInstance, TableType, Restaurant, Booking, BookingTable
-from project.schemas import TableSchema
+from app.models import TableInstance, TableType, Restaurant, Booking, BookingTable
+from app.schemas import TableSchema
 
 
 
@@ -104,7 +101,7 @@ class TableListResource(MethodView):
         # Construct response
         if failed_tables:
             return {
-                "data": [table.to_dict() for table in created_tables],
+                "successful": [table.to_dict() for table in created_tables],
                 "failed": failed_tables,
                 "message": "Some tables couldn't be created due to errors.",
                 "status": 207  # 207 Multi-Status for partial success
@@ -212,7 +209,6 @@ class TableResource(MethodView):
         verify_admin_ownership(admin_id, restaurant_id)
     
         try:
-            # Use `joinedload` to fetch the related TableType in a single query (Prevents N+1 query issue)
             table = (
                 TableInstance.query
                 .join(TableType, TableInstance.table_type_id == TableType.id)  # Join to enforce restaurant_id check
