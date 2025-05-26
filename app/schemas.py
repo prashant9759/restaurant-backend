@@ -252,6 +252,8 @@ class FeatureSpecialityActionSchema(Schema):
     add = fields.List(fields.String(), required=False)
     remove = fields.List(fields.Integer(), required=False)
 
+
+
 class UpdateFeatureSpecialitySchema(Schema):
     features = fields.Nested(FeatureSpecialityActionSchema, required=False)
     specialities = fields.Nested(FeatureSpecialityActionSchema, required=False)
@@ -274,6 +276,7 @@ class UserLoginSchema(AdminLoginSchema):
 
 
 class FoodOfferingPeriodSchema(Schema):
+    id = fields.Int(dump_only =True)
     name = fields.Str(required=True)
     start_time = fields.Str(required=True, example="08:00")
     end_time = fields.Str(required=True, example="11:30")
@@ -291,10 +294,141 @@ class FoodOfferingPeriodSchema(Schema):
 
 
 
+class FoodCategorySchema(Schema):
+    id = fields.Int(dump_only =True)
+    name = fields.Str(required=True)
+    description = fields.Str(required=False)
+    
+
+
 
 class FoodDietaryTypeSchema(Schema):
+    id = fields.Int(dump_only =True)
     name = fields.Str(required=True)
-    description = fields.Str()
+    description = fields.Str(required=False)
+
+
+
+class FoodItemVariantSchema(Schema):
+    id = fields.Int(dump_only =True)
+    name = fields.Str(required=True)
+    price = fields.Float(required=True)
+    description = fields.Str(required=False)
+
+
+
+class FoodItemSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str(required=True)
+    description = fields.Str(required=False)
+    base_price = fields.Float(required=False)
+    is_available = fields.Bool(missing=True)
+    has_variants = fields.Bool(missing=False)
+    food_category_id = fields.Int(required=True)
+
+    offering_period_ids = fields.List(fields.Int(), required=True)
+    dietary_type_ids = fields.List(fields.Int(), required=True)
+
+    variants = fields.List(fields.Nested(FoodItemVariantSchema), required=False)
+
+
+
+
+class FoodOrderItemSchema(Schema):
+    food_item_id = fields.Integer(required=True)
+    variant_id = fields.Integer(allow_none=True)
+    quantity = fields.Integer(required=True, validate=validate.Range(min=1))
+
+    @staticmethod
+    def validate_variant(data):
+        # Custom validator if needed later
+        pass
+
+
+
+class FoodOrderUpdateSchema(Schema):
+    items = fields.List(fields.Nested(FoodOrderItemSchema), required=True, validate=validate.Length(min=1))
+
+
+
+
+class FoodStockSchema(Schema):
+    id = fields.Int(dump_only=True)
+    food_item_id = fields.Int(required=True)
+    variant_id = fields.Int(allow_none=True)
+    current_stock = fields.Int(required=True, validate=validate.Range(min=0))
+    threshold = fields.Int(required=True, validate=validate.Range(min=0))
+    last_updated = fields.DateTime(dump_only=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
