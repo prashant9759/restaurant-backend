@@ -162,6 +162,9 @@ pip-wheel-metadata/
 instance/
 *.log
 
+# Application logs
+logs/
+
 # Pytest cache
 .pytest_cache/
 
