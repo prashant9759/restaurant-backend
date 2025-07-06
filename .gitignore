@@ -232,3 +232,6 @@ test_results/
 staticfiles/
 media/
 >>>>>>> 1302f0e (Initial commit)
+
+run_app.py
+test_middleware.py
